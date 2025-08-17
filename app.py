@@ -582,7 +582,6 @@ def show_operator_tu_page():
             st.session_state.current_menu = option
             st.rerun()
 
-    # Logika untuk menandai tombol aktif
     js_highlight_active_button = f"""
     <script>
         function cleanButtonText(text) {{
@@ -728,14 +727,15 @@ def show_operator_tu_page():
                         with st.expander(f"Klaster {cluster_id}"):
                             st.markdown(desc)
                     
-                    try:
-                        df_final_for_kepsek = df_final.copy()
-                        df_final_for_kepsek['Kehadiran'] = df_final_for_kepsek['Kehadiran'].apply(lambda x: f"{x:.2%}")
-                        file_name = "Data MA-ALHIKMAH.xlsx"
-                        df_final_for_kepsek.to_excel(file_name, index=False)
-                        st.success(f"Hasil klasterisasi berhasil disimpan ke file '{file_name}' untuk diakses oleh Kepala Sekolah.")
-                    except Exception as e:
-                        st.error(f"Gagal menyimpan file Excel untuk Kepala Sekolah: {e}")
+                    # PERBAIKAN: Hapus penyimpanan file lokal karena tidak konsisten di cloud
+                    # try:
+                    #     df_final_for_kepsek = df_final.copy()
+                    #     df_final_for_kepsek['Kehadiran'] = df_final_for_kepsek['Kehadiran'].apply(lambda x: f"{x:.2%}")
+                    #     file_name = "Data MA-ALHIKMAH.xlsx"
+                    #     df_final_for_kepsek.to_excel(file_name, index=False)
+                    #     st.success(f"Hasil klasterisasi berhasil disimpan ke file '{file_name}' untuk diakses oleh Kepala Sekolah.")
+                    # except Exception as e:
+                    #     st.error(f"Gagal menyimpan file Excel untuk Kepala Sekolah: {e}")
 
     elif st.session_state.current_menu == "Prediksi Klaster Siswa Baru":
         st.header("Prediksi Klaster untuk Siswa Baru")
@@ -811,6 +811,7 @@ def show_operator_tu_page():
                     plt.xticks(rotation=0)
                     plt.tight_layout()
                     st.pyplot(fig)
+                    plt.close(fig) # PERBAIKAN: Menutup plot untuk mencegah kebocoran memori
 
     elif st.session_state.current_menu == "Visualisasi & Profil Klaster":
         st.header("Visualisasi dan Interpretasi Profil Klaster")
@@ -873,6 +874,7 @@ def show_operator_tu_page():
                         plt.xticks(rotation=0)
                         plt.tight_layout()
                         st.pyplot(fig)
+                        plt.close(fig) # PERBAIKAN: Menutup plot untuk mencegah kebocoran memori
                 st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
 
     elif st.session_state.current_menu == "Lihat Profil Siswa Individual":
@@ -952,6 +954,7 @@ def show_operator_tu_page():
                     plt.xticks(rotation=0)
                     plt.tight_layout()
                     st.pyplot(fig)
+                    plt.close(fig) # PERBAIKAN: Menutup plot untuk mencegah kebocoran memori
                 st.markdown("<div style='margin-top: 30px;'></div>", unsafe_allow_html=True)
                 st.subheader(f"Siswa Lain di Klaster {klaster_siswa_terpilih}:")
                 siswa_lain_di_klaster = df_original_with_cluster[
@@ -993,32 +996,11 @@ def show_operator_tu_page():
 
 
 def show_kepala_sekolah_page():
-    file_path = "Data MA-ALHIKMAH.xlsx"
-    df_kepsek_load = None
-    if os.path.exists(file_path):
-        try:
-            df_kepsek_load = pd.read_excel(file_path, engine='openpyxl')
-            st.session_state.df_clustered = df_kepsek_load
-            
-            if 'df_original' not in st.session_state or st.session_state.df_original is None:
-                df_original_from_clustered = df_kepsek_load.copy()
-                if df_original_from_clustered['Kehadiran'].dtype == 'object':
-                    df_original_from_clustered['Kehadiran'] = df_original_from_clustered['Kehadiran'].str.rstrip('%').astype('float') / 100
-                st.session_state.df_original = df_original_from_clustered.drop(columns=['Klaster'], errors='ignore')
-
-                n_clusters_kepsek = len(df_kepsek_load['Klaster'].unique())
-                st.session_state.n_clusters = n_clusters_kepsek
-                
-                df_preprocessed, scaler = preprocess_data(st.session_state.df_original)
-                if df_preprocessed is not None:
-                    df_preprocessed['Klaster'] = df_kepsek_load['Klaster']
-                    st.session_state.cluster_characteristics_map = generate_cluster_descriptions(
-                        df_preprocessed, n_clusters_kepsek, NUMERIC_COLS, CATEGORICAL_COLS
-                    )
-        except Exception as e:
-            st.error(f"Terjadi kesalahan saat membaca file '{file_path}': {e}.")
-            st.session_state.df_clustered = None
-            
+    # PERBAIKAN: Hapus logika pembacaan file Excel lokal dan langsung cek session state.
+    if st.session_state.df_clustered is None or st.session_state.df_clustered.empty:
+        st.warning(f"Data hasil klasterisasi tidak ditemukan. Mohon minta Operator TU untuk memproses data terlebih dahulu.")
+        return
+        
     st.sidebar.title("MENU NAVIGASI")
     st.sidebar.markdown("---")
     
@@ -1088,7 +1070,7 @@ def show_kepala_sekolah_page():
     st.title("👨‍💼 Dasbor Kepala Sekolah")
     
     if st.session_state.df_clustered is None or st.session_state.df_clustered.empty:
-        st.warning(f"File hasil klasterisasi 'Data MA-ALHIKMAH.xlsx' tidak ditemukan atau tidak valid. Mohon minta Operator TU untuk memproses dan menyimpan hasilnya terlebih dahulu.")
+        st.warning(f"Data hasil klasterisasi tidak ditemukan. Mohon minta Operator TU untuk memproses dan menyimpan hasilnya terlebih dahulu.")
         return
 
     if st.session_state.kepsek_current_menu == "Lihat Hasil Klasterisasi":
@@ -1117,22 +1099,27 @@ def show_kepala_sekolah_page():
         st.subheader(f"Karakteristik Umum Klaster ({st.session_state.n_clusters} Klaster):")
         st.write("Berikut adalah deskripsi singkat untuk setiap klaster yang terbentuk:")
         
+        # PERBAIKAN: Gunakan data asli untuk preprocessing agar visualisasi konsisten
+        df_preprocessed_temp, scaler_temp = preprocess_data(st.session_state.df_original)
+        if df_preprocessed_temp is None:
+            st.error("Gagal melakukan praproses data untuk visualisasi.")
+            return
+
+        df_preprocessed_temp['Klaster'] = st.session_state.df_clustered['Klaster']
+
         for i in range(st.session_state.n_clusters):
             st.markdown(f"---")
             st.subheader(f"Klaster {i}")
             cluster_data = st.session_state.df_clustered[st.session_state.df_clustered["Klaster"] == i]
+            cluster_data_norm = df_preprocessed_temp[df_preprocessed_temp["Klaster"] == i]
             
             col1, col2 = st.columns([1, 2])
             with col1:
                 st.markdown("#### Statistik Klaster")
                 st.markdown(f"Jumlah Siswa: {len(cluster_data)}")
                 
-                df_preprocessed_temp, scaler_temp = preprocess_data(st.session_state.df_original)
-                if df_preprocessed_temp is not None:
-                    df_preprocessed_temp['Klaster'] = st.session_state.df_clustered['Klaster']
-                    cluster_data_norm = df_preprocessed_temp[df_preprocessed_temp["Klaster"] == i]
-                    st.write("Rata-rata Nilai & Kehadiran (Dinormalisasi):")
-                    st.dataframe(cluster_data_norm[NUMERIC_COLS].mean().round(2).to_frame(name='Rata-rata'), use_container_width=True)
+                st.write("Rata-rata Nilai & Kehadiran (Dinormalisasi):")
+                st.dataframe(cluster_data_norm[NUMERIC_COLS].mean().round(2).to_frame(name='Rata-rata'), use_container_width=True)
 
                 st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
                 st.write("Kecenderungan Ekstrakurikuler (Modus):")
@@ -1146,25 +1133,25 @@ def show_kepala_sekolah_page():
                 st.markdown("#### Grafik Profil Klaster")
                 st.write("📈 Visualisasi ini menunjukkan rata-rata (numerik) atau modus (kategorikal) dari fitur-fitur di klaster ini.")
                 
-                if df_preprocessed_temp is not None:
-                    values_for_plot_numeric = cluster_data_norm[NUMERIC_COLS].mean().tolist()
-                    values_for_plot_ekskul = [int(cluster_data_norm[col].mode().iloc[0]) for col in CATEGORICAL_COLS]
-                    values_for_plot = values_for_plot_numeric + values_for_plot_ekskul
-                    labels_for_plot = ["Nilai (Norm)", "Kehadiran (Norm)"] + [col.replace("Ekstrakurikuler ", "Ekskul\n") for col in CATEGORICAL_COLS]
-                    
-                    fig, ax = plt.subplots(figsize=(10, 6))
-                    bars = sns.barplot(x=labels_for_plot, y=values_for_plot, palette="cubehelix", ax=ax)
-                    ax.set_ylim(min(values_for_plot) - 0.2 if values_for_plot else -1, max(values_for_plot) + 0.2 if values_for_plot else 1)
-                    
-                    for index, value in enumerate(values_for_plot):
-                        offset = 0.05 if value >= 0 else -0.1
-                        ax.text(bars.patches[index].get_x() + bars.patches[index].get_width() / 2, bars.patches[index].get_height() + offset, f"{value:.2f}", ha='center', fontsize=9, weight='bold')
-                    
-                    ax.set_title(f"Profil Klaster {i}", fontsize=16, weight='bold')
-                    ax.set_ylabel("Nilai (Dinormalisasi / Biner)")
-                    plt.xticks(rotation=0)
-                    plt.tight_layout()
-                    st.pyplot(fig)
+                values_for_plot_numeric = cluster_data_norm[NUMERIC_COLS].mean().tolist()
+                values_for_plot_ekskul = [int(cluster_data_norm[col].mode().iloc[0]) for col in CATEGORICAL_COLS]
+                values_for_plot = values_for_plot_numeric + values_for_plot_ekskul
+                labels_for_plot = ["Nilai (Norm)", "Kehadiran (Norm)"] + [col.replace("Ekstrakurikuler ", "Ekskul\n") for col in CATEGORICAL_COLS]
+                
+                fig, ax = plt.subplots(figsize=(10, 6))
+                bars = sns.barplot(x=labels_for_plot, y=values_for_plot, palette="cubehelix", ax=ax)
+                ax.set_ylim(min(values_for_plot) - 0.2 if values_for_plot else -1, max(values_for_plot) + 0.2 if values_for_plot else 1)
+                
+                for index, value in enumerate(values_for_plot):
+                    offset = 0.05 if value >= 0 else -0.1
+                    ax.text(bars.patches[index].get_x() + bars.patches[index].get_width() / 2, bars.patches[index].get_height() + offset, f"{value:.2f}", ha='center', fontsize=9, weight='bold')
+                
+                ax.set_title(f"Profil Klaster {i}", fontsize=16, weight='bold')
+                ax.set_ylabel("Nilai (Dinormalisasi / Biner)")
+                plt.xticks(rotation=0)
+                plt.tight_layout()
+                st.pyplot(fig)
+                plt.close(fig) # PERBAIKAN: Menutup plot untuk mencegah kebocoran memori
         st.markdown("<div style='margin-top: 20px;'></div>", unsafe_allow_html=True)
         
     elif st.session_state.kepsek_current_menu == "Lihat Profil Siswa Individual":
@@ -1228,7 +1215,7 @@ def show_kepala_sekolah_page():
                     float(str(siswa_data.get("Kehadiran", "0%")).replace('%',''))
                 ]
                 values_siswa_plot_ekskul = [
-                    siswa_data.get(col, 0) * 100 for col in CATEGORICAL_COLS
+                    float(str(siswa_data.get(col, 0))) * 100 for col in CATEGORICAL_COLS
                 ]
                 values_siswa_plot = values_siswa_plot_numeric + values_siswa_plot_ekskul
                 fig, ax = plt.subplots(figsize=(10, 6))
@@ -1242,6 +1229,7 @@ def show_kepala_sekolah_page():
                 plt.xticks(rotation=0)
                 plt.tight_layout()
                 st.pyplot(fig)
+                plt.close(fig) # PERBAIKAN: Menutup plot untuk mencegah kebocoran memori
             st.markdown("---")
             st.subheader(f"Siswa Lain di Klaster {klaster_siswa_terpilih}:")
             siswa_lain_di_klaster = df_kepsek[
@@ -1318,7 +1306,11 @@ if st.session_state.role is None:
     with col_kepsek:
         if st.button("Masuk sebagai **Kepala Sekolah**", use_container_width=True, key="login_kepsek"):
             st.session_state.role = 'Kepala Sekolah'
-            st.session_state.kepsek_current_menu = "Lihat Hasil Klasterisasi"
+            # PERBAIKAN: Inisialisasi df_clustered dari session_state jika ada
+            if 'df_clustered' in st.session_state and st.session_state.df_clustered is not None:
+                st.session_state.kepsek_current_menu = "Lihat Hasil Klasterisasi"
+            else:
+                st.session_state.kepsek_current_menu = "Lihat Hasil Klasterisasi"
             st.rerun()
             
 elif st.session_state.role == 'Operator TU':
